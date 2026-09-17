@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import type { BulkRequest, ListNotesQuery, SaveVersionRequest, TransitionRequest } from './contracts';
 import { DummyBackendStore } from './store';
+import { realtimeBus } from './realtime';
 import { mulberry32 } from './seed';
 
 export interface DummyBackendConfig {
@@ -65,6 +66,14 @@ export const createDummyBackendPlugin = (config: DummyBackendConfig = {}): Plugi
         const url = new URL(request.url ?? '/', 'http://localhost');
         if (!url.pathname.startsWith('/api/')) return next();
         try {
+          if (url.pathname === '/api/events' && request.method === 'GET') {
+            const noteIds = new Set((url.searchParams.get('notes') ?? '').split(',').filter(Boolean));
+            const cursor = Number(url.searchParams.get('cursor') ?? '0');
+            response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+            const write = (event: import('./realtime').RealtimeEvent) => { if (noteIds.has(event.noteId)) response.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`); };
+            realtimeBus.since(cursor, noteIds).forEach(write); const unsubscribe = realtimeBus.subscribe(write);
+            request.on('close', unsubscribe); return;
+          }
           if (url.pathname === '/api/dev/seed' && request.method === 'POST') {
             const body = await readBody(request);
             const count = typeof body === 'object' && body !== null && 'count' in body && typeof body.count === 'number' ? body.count : 5_000;

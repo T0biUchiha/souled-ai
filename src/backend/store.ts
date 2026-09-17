@@ -4,6 +4,7 @@ import type {
   ApiResult, BulkRequest, BulkResult, ListNotesQuery, NoteDetail, NotePage, NoteSummary, SaveVersionRequest, TransitionRequest, TransitionResponse,
 } from './contracts';
 import { createSeedData } from './seed';
+import { realtimeBus } from './realtime';
 
 export interface DummyBackendOptions { seedCount?: number; now?: () => string }
 
@@ -111,6 +112,7 @@ export class DummyBackendStore {
     this.versions.set(version.id, version); this.mutations.set(request.clientMutationId, version);
     stored.note = { ...stored.note, currentVersionId: version.id, updatedAt: version.createdAt };
     this.appendEvent(stored.note, version.id, 'version.created', request.actor.id, null, stored.note.status, stored.note.status, { clientMutationId: request.clientMutationId });
+    realtimeBus.publish({ type: 'note.version_added', noteId, version, occurredAt: version.createdAt });
     return { ok: true, data: version };
   }
 
@@ -138,6 +140,8 @@ export class DummyBackendStore {
       currentVersionId: createdVersion?.id ?? current.currentVersionId,
     };
     const event = this.appendEvent(stored.note, stored.note.currentVersionId, request.action.type, request.actor?.id ?? 'system', request.action.type === 'reject' || request.action.type === 'amend' ? request.action.reason?.trim() || null : null, current.status, stored.note.status, { source });
+    if (createdVersion !== undefined) realtimeBus.publish({ type: 'note.version_added', noteId, version: createdVersion, occurredAt: now });
+    realtimeBus.publish({ type: 'note.status_changed', noteId, action: event.action, fromStatus: current.status, toStatus: stored.note.status, occurredAt: now });
     return { ok: true, data: { note: stored.note, event } };
   }
 

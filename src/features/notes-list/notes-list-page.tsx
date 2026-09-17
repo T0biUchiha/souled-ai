@@ -6,6 +6,7 @@ import type { NoteStatus } from '../../domain';
 import type { NoteSummary } from '../../backend/contracts';
 import type { BulkRequest, NotePage } from '../../backend/contracts';
 import { noteApi } from '../../data/api-client';
+import { useRealtimeNotes } from '../../data/use-realtime-notes';
 import { parseNotesListUrlState, notesListUrlParams, type NotesListUrlState } from './url-state';
 import { useNotesList } from './use-notes-list';
 import './notes-list.css';
@@ -55,6 +56,7 @@ export function NotesListPage() {
   const parentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({ count: notes.length, getScrollElement: () => parentRef.current, estimateSize: () => 48, overscan: 8 });
   const virtualRows = virtualizer.getVirtualItems();
+  useRealtimeNotes(useMemo(() => virtualRows.map((row) => notes[row.index]!.id), [notes, virtualRows]));
   useEffect(() => {
     const last = virtualRows.at(-1);
     if (last !== undefined && last.index >= notes.length - 8 && hasNextPage && !isFetchingNextPage) void fetchNextPage();

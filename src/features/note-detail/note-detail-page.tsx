@@ -12,6 +12,7 @@ import { resolveVersionConflict, type VersionConflict } from './conflict-resolut
 import { queueVersionSave } from '../../data/offline-queue';
 import { queueTransition } from '../../data/offline-queue';
 import { useOfflineSync } from '../../data/offline-sync';
+import { useRealtimeNotes } from '../../data/use-realtime-notes';
 import './note-detail.css';
 
 const sections: ReadonlyArray<{ key: SoapSection; label: string }> = [
@@ -34,6 +35,7 @@ export function NoteDetailPage() {
   const [optimistic, setOptimistic] = useState<ReturnType<typeof beginOptimisticTransition> | null>(null); const [transitionError, setTransitionError] = useState<string | null>(null); const [transitionPending, setTransitionPending] = useState(false);
   const initializedNoteId = useRef<string | null>(null); const draftRef = useRef<WorkingDraft | null>(null); const baseVersionIdRef = useRef(''); const coordinatorRef = useRef<SaveCoordinator<SoapContent, NoteVersion | { queued: true }> | null>(null);
   useEffect(() => { draftRef.current = draft; }, [draft]);
+  useRealtimeNotes(noteId === '' ? [] : [noteId], (event) => { if (event.type === 'note.version_added' && draftRef.current !== null && event.version.id !== draftRef.current.baseVersionId) setConflict({ commonAncestor: acknowledged, server: event.version, local: draftRef.current }); });
   useEffect(() => { if (replayConflict !== null && replayConflict.noteId === noteId && draftRef.current !== null) setConflict({ commonAncestor: replayConflict.commonAncestor, server: replayConflict.current, local: draftRef.current }); }, [noteId, replayConflict]);
   useEffect(() => { if (detail.data?.currentVersion !== null && detail.data?.currentVersion !== undefined && initializedNoteId.current !== noteId) { initializedNoteId.current = noteId; const initial = { baseVersionId: detail.data.currentVersion.id, content: { ...detail.data.currentVersion.content } }; baseVersionIdRef.current = initial.baseVersionId; setAcknowledged(detail.data.currentVersion); setDraft(initial); setConflict(null); } }, [detail.data?.currentVersion, noteId]);
   const actor: User | null = useMemo(() => detail.data === undefined ? null : { id: detail.data.assignedReviewerId ?? 'reviewer-1', displayName: 'Demo review user', roles: ['CLINICIAN', 'REVIEWER', 'ADMIN'] }, [detail.data]);
