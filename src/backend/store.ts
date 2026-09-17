@@ -6,6 +6,7 @@ import type {
 import { createSeedData } from './seed';
 import { realtimeBus } from './realtime';
 import { isDemoReviewer } from '../auth/demo-reviewers';
+import { can } from '../domain/permissions';
 
 export interface DummyBackendOptions { seedCount?: number; now?: () => string }
 
@@ -106,6 +107,9 @@ export class DummyBackendStore {
     if (retried !== undefined) return { ok: true, data: retried };
     const stored = this.notes.get(noteId);
     if (stored === undefined) return { ok: false, status: 404, error: { error: 'not_found', message: 'Note not found.' } };
+    if (!can(request.actor, 'note.edit', stored.note, { now: this.now() })) {
+      return { ok: false, status: 403, error: { error: 'forbidden', message: 'You are not permitted to edit this note.' } };
+    }
     if (stored.note.currentVersionId !== request.baseVersionId) {
       const current = stored.note.currentVersionId === null ? undefined : this.versions.get(stored.note.currentVersionId);
       if (current === undefined) return { ok: false, status: 409, error: { error: 'version_conflict', current: this.versions.get(request.baseVersionId)!, commonAncestor: null } };

@@ -1,3 +1,4 @@
+import { can } from './permissions';
 import { evaluateTransition, transitionSpecifications, type TransitionAction, type TransitionContext } from './state-machine';
 
 export interface ActionPresentation {
@@ -32,4 +33,4 @@ export const selectActions = (
     });
 
 export const isNoteReadOnly = (context: TransitionContext): boolean =>
-  !selectActions(context).some((action) => action.enabled);
+  context.actor === null || !can(context.actor, 'note.edit', context.note, { now: context.now, mfaReauthenticated: context.mfaReauthenticated });

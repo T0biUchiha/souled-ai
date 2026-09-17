@@ -56,6 +56,13 @@ describe('DummyBackendStore', () => {
     expect(first).toMatchObject({ ok: true, data: { parentVersionId: 'version-1-1' } });
   });
 
+  it('rejects a version save from an unauthorized actor', () => {
+    const store = new DummyBackendStore({ seedCount: 1, now });
+    const auditor: User = { id: 'auditor-1', displayName: 'Auditor', roles: ['READONLY_AUDITOR'] };
+    const result = store.saveVersion('note-1', { ...versionRequest('auditor-mutation'), actor: auditor });
+    expect(result).toMatchObject({ ok: false, status: 403, error: { error: 'forbidden' } });
+  });
+
   it('returns a conflict and common ancestor instead of overwriting a stale version', () => {
     const store = new DummyBackendStore({ seedCount: 1, now });
     store.saveVersion('note-1', versionRequest('mutation-1'));

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SaveCoordinator } from './save-coordinator';
 
 const settle = async (): Promise<void> => { await new Promise((resolve) => setTimeout(resolve, 5)); };
@@ -19,5 +19,13 @@ describe('SaveCoordinator', () => {
     const coordinator = new SaveCoordinator<string, string>({ debounceMs: 0, prepare: (content) => ({ baseVersionId: 'v1', content, clientMutationId: 'fixed-id' }), save: async (request) => { sent.push(request.clientMutationId); attempt += 1; if (attempt === 1) throw new Error('offline'); return 'saved'; }, onSaved: () => undefined, onFailed: () => undefined });
     coordinator.flush('draft'); await settle(); expect(sent).toHaveLength(1); coordinator.retryFailed(); await settle(); expect(sent).toHaveLength(2);
     expect(sent).toEqual(['fixed-id', 'fixed-id']);
+  });
+
+  it('does not deliver a stale completion after disposal', async () => {
+    let resolveSave: ((value: string) => void) | undefined;
+    const saved = vi.fn();
+    const coordinator = new SaveCoordinator<string, string>({ debounceMs: 0, prepare: (content) => ({ baseVersionId: 'v1', content, clientMutationId: 'm1' }), save: () => new Promise((resolve) => { resolveSave = resolve; }), onSaved: saved, onFailed: vi.fn() });
+    coordinator.flush('draft'); await Promise.resolve(); coordinator.dispose(); resolveSave?.('version-2'); await Promise.resolve();
+    expect(saved).not.toHaveBeenCalled();
   });
 });

@@ -23,4 +23,9 @@ describe('capability helpers', () => {
     expect(can(auditor, 'note.viewHistory', note, { now: note.updatedAt })).toBe(true);
     expect(can(auditor, 'note.startReview', note, { now: note.updatedAt })).toBe(false);
   });
+
+  it('allows clinician editing except on locked notes', () => {
+    expect(can(clinician, 'note.edit', note, { now: note.updatedAt })).toBe(true);
+    expect(can(clinician, 'note.edit', { ...note, status: 'LOCKED' }, { now: note.updatedAt })).toBe(false);
+  });
 });

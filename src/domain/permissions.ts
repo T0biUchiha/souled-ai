@@ -34,6 +34,14 @@ export const capabilityDecision = (
   context: CapabilityContext,
 ): TransitionDecision | { allowed: true } => {
   if (capability === 'note.view' || capability === 'note.viewHistory') return { allowed: true };
+  if (capability === 'note.edit') {
+    if (!user.roles.some((role) => role === 'CLINICIAN' || role === 'ADMIN')) {
+      return { allowed: false, code: 'ROLE_REQUIRED', reason: 'Only a clinician or administrator can edit note content.' };
+    }
+    return note.status === 'LOCKED'
+      ? { allowed: false, code: 'INVALID_STATUS', reason: 'Locked notes cannot be edited.' }
+      : { allowed: true };
+  }
   const action = actionForCapability[capability];
   if (action === undefined) return { allowed: false, code: 'INVALID_STATUS', reason: 'Unsupported capability.' };
   return evaluateTransition({

@@ -21,7 +21,7 @@ export const queueTransition = async (noteId: string, request: TransitionRequest
 };
 
 export interface ReplayExecutor { saveVersion(noteId: string, request: SaveVersionRequest): Promise<NoteVersion>; transition(noteId: string, request: TransitionRequest): Promise<unknown> }
-export interface ReplayResult { replayed: number; total: number; conflict: { noteId: string; current: NoteVersion; commonAncestor: NoteVersion | null } | null }
+export interface ReplayResult { replayed: number; total: number; conflict: { mutationId: string; noteId: string; current: NoteVersion; commonAncestor: NoteVersion | null } | null }
 
 export const replayQueue = async (executor: ReplayExecutor, onProgress?: (done: number, total: number) => void): Promise<ReplayResult> => {
   const pending = await offlineDb.queuedMutations.orderBy('createdAt').filter((mutation) => mutation.status === 'PENDING').toArray();
@@ -39,7 +39,7 @@ export const replayQueue = async (executor: ReplayExecutor, onProgress?: (done: 
           await offlineDb.queuedMutations.where('noteId').equals(mutation.noteId).modify((item) => { if (item.createdAt > mutation.createdAt) item.status = 'BLOCKED'; });
         });
         const payload = apiError.payload as { current: NoteVersion; commonAncestor: NoteVersion | null };
-        return { replayed, total: pending.length, conflict: { noteId: mutation.noteId, current: payload.current, commonAncestor: payload.commonAncestor } };
+        return { replayed, total: pending.length, conflict: { mutationId: mutation.id, noteId: mutation.noteId, current: payload.current, commonAncestor: payload.commonAncestor } };
       }
       await offlineDb.queuedMutations.update(mutation.id, { retryCount: mutation.retryCount + 1, lastError: error instanceof Error ? error.message : 'Replay failed' });
       return { replayed, total: pending.length, conflict: null };
@@ -49,3 +49,13 @@ export const replayQueue = async (executor: ReplayExecutor, onProgress?: (done: 
 };
 
 export const queuedMutationCount = (): Promise<number> => offlineDb.queuedMutations.where('status').anyOf('PENDING', 'BLOCKED', 'FAILED').count();
+
+/** Removes the conflicted write only after its replacement version is confirmed, then resumes dependent commands. */
+export const completeReplayConflict = async (noteId: string, mutationId: string): Promise<void> => {
+  await offlineDb.transaction('rw', offlineDb.queuedMutations, async () => {
+    await offlineDb.queuedMutations.delete(mutationId);
+    await offlineDb.queuedMutations.where('noteId').equals(noteId).modify((mutation) => {
+      if (mutation.status === 'BLOCKED') mutation.status = 'PENDING';
+    });
+  });
+};
