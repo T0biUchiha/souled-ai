@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { diffWords, isNoteReadOnly, selectActions, type SoapContent, type TransitionAction, type User } from '../../domain';
+import { diffWords, isNoteReadOnly, selectActions, type SoapContent, type TransitionAction } from '../../domain';
 import { noteApi } from '../../data/api-client';
 import { ApiClientError } from '../../data/api-client';
 import type { NoteVersion } from '../../domain';
@@ -13,6 +13,8 @@ import { queueVersionSave } from '../../data/offline-queue';
 import { queueTransition } from '../../data/offline-queue';
 import { useOfflineSync } from '../../data/offline-sync';
 import { useRealtimeNotes } from '../../data/use-realtime-notes';
+import { otherViewers, presenceLabel } from './presence';
+import { useSessionStore } from '../../auth/session-store';
 import './note-detail.css';
 
 const sections: ReadonlyArray<{ key: SoapSection; label: string }> = [
@@ -26,22 +28,25 @@ const mutationId = (): string => globalThis.crypto?.randomUUID?.() ?? `mutation-
 
 export function NoteDetailPage() {
   const { noteId = '' } = useParams(); const queryClient = useQueryClient();
+  const actor = useSessionStore((state) => state.currentUser);
   const { online, refreshQueue, replayConflict, completeConflict } = useOfflineSync();
   const detail = useQuery({ queryKey: ['note', noteId], queryFn: () => noteApi.get(noteId), enabled: noteId !== '' });
   const [draft, setDraft] = useState<WorkingDraft | null>(null); const [rejectReason, setRejectReason] = useState('');
   const [selectedVersions, setSelectedVersions] = useState<readonly string[]>([]);
   const [acknowledged, setAcknowledged] = useState<NoteVersion | null>(null); const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<VersionConflict | null>(null);
+  const [presence, setPresence] = useState<Extract<Parameters<NonNullable<Parameters<typeof useRealtimeNotes>[1]>>[0], { type: 'note.presence' }> | null>(null);
   const [optimistic, setOptimistic] = useState<ReturnType<typeof beginOptimisticTransition> | null>(null); const [transitionError, setTransitionError] = useState<string | null>(null); const [transitionPending, setTransitionPending] = useState(false);
-  const initializedNoteId = useRef<string | null>(null); const draftRef = useRef<WorkingDraft | null>(null); const acknowledgedRef = useRef<NoteVersion | null>(null); const resolvedReplayConflictRef = useRef<{ noteId: string; mutationId: string } | null>(null); const baseVersionIdRef = useRef(''); const coordinatorRef = useRef<SaveCoordinator<SoapContent, NoteVersion | { queued: true }> | null>(null);
+  const initializedNoteId = useRef<string | null>(null); const draftRef = useRef<WorkingDraft | null>(null); const acknowledgedRef = useRef<NoteVersion | null>(null); const historyRef = useRef<HTMLElement>(null); const actorIdRef = useRef(''); const resolvedReplayConflictRef = useRef<{ noteId: string; mutationId: string } | null>(null); const baseVersionIdRef = useRef(''); const coordinatorRef = useRef<SaveCoordinator<SoapContent, NoteVersion | { queued: true }> | null>(null);
   useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => { acknowledgedRef.current = acknowledged; }, [acknowledged]);
   const realtimeNoteIds = useMemo(() => noteId === '' ? [] : [noteId], [noteId]);
-  const onRealtimeEvent = useCallback((event: Parameters<NonNullable<Parameters<typeof useRealtimeNotes>[1]>>[0]) => { if (event.type === 'note.version_added' && draftRef.current !== null && event.version.id !== draftRef.current.baseVersionId) setConflict({ commonAncestor: acknowledgedRef.current, server: event.version, local: draftRef.current }); }, []);
+  const onRealtimeEvent = useCallback((event: Parameters<NonNullable<Parameters<typeof useRealtimeNotes>[1]>>[0]) => { if (event.type === 'note.presence') setPresence(event); if (event.type === 'note.version_added' && draftRef.current !== null) { const local = draftRef.current; const isCompetingChild = event.version.parentVersionId === local.baseVersionId; const matchesLocalDraft = Object.keys(local.content).every((key) => local.content[key as keyof SoapContent] === event.version.content[key as keyof SoapContent]); const isOwnSave = event.version.createdById === actorIdRef.current; if (isCompetingChild && !matchesLocalDraft && !isOwnSave) setConflict({ commonAncestor: acknowledgedRef.current, server: event.version, local }); } }, []);
   useRealtimeNotes(realtimeNoteIds, onRealtimeEvent);
   useEffect(() => { if (replayConflict !== null && replayConflict.noteId === noteId && draftRef.current !== null) setConflict({ commonAncestor: replayConflict.commonAncestor, server: replayConflict.current, local: draftRef.current }); }, [noteId, replayConflict]);
   useEffect(() => { if (detail.data?.currentVersion !== null && detail.data?.currentVersion !== undefined && initializedNoteId.current !== noteId) { initializedNoteId.current = noteId; const initial = { baseVersionId: detail.data.currentVersion.id, content: { ...detail.data.currentVersion.content } }; baseVersionIdRef.current = initial.baseVersionId; setAcknowledged(detail.data.currentVersion); setDraft(initial); setConflict(null); } }, [detail.data?.currentVersion, noteId]);
-  const actor: User | null = useMemo(() => detail.data === undefined ? null : { id: detail.data.assignedReviewerId ?? 'reviewer-1', displayName: 'Demo review user', roles: ['CLINICIAN', 'REVIEWER', 'ADMIN'] }, [detail.data]);
+  useEffect(() => { actorIdRef.current = actor?.id ?? ''; }, [actor]);
+  useEffect(() => { if (actor === null || noteId === '') return; const role = actor.roles[0] ?? 'REVIEWER'; void noteApi.presence({ noteId, userId: actor.id, displayName: actor.displayName, role, mode: 'join' }); return () => { void noteApi.presence({ noteId, userId: actor.id, mode: 'leave' }); setPresence(null); }; }, [actor, noteId]);
   const displayedNote = optimistic?.optimisticNote ?? detail.data;
   const context = displayedNote === undefined ? null : { note: displayedNote, actor, source: 'USER' as const, now: new Date().toISOString(), mfaReauthenticated: true };
   const actions = context === null ? [] : selectActions(context, { reject: { type: 'reject', reason: rejectReason } });
@@ -70,10 +75,12 @@ export function NoteDetailPage() {
     }).catch((error: unknown) => { setOptimistic(null); setTransitionPending(false); setTransitionError(error instanceof Error ? error.message : 'Transition failed.'); });
   };
   const compared = selectedVersions.map((id) => detail.data?.versions.find((version) => version.id === id)).filter((version): version is NoteVersion => version !== undefined);
+  useEffect(() => { if (compared.length === 2) historyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); }, [compared.length]);
 
   if (detail.status === 'pending') return <p aria-busy="true">Loading note…</p>;
   if (detail.status === 'error' || detail.data === undefined) return <p role="alert">Could not load this note.</p>;
-  return <section aria-labelledby="note-title" className="note-detail-page"><header className="note-detail-hero"><Link className="back-link" to="/notes">← Back to notes</Link><div className="note-title-row"><div><p className="eyebrow">Clinical note review</p><h1 id="note-title">{detail.data.patientName}</h1><p className="note-meta">Encounter {detail.data.encounterId} · Last updated {new Date(detail.data.updatedAt).toLocaleString()}</p></div><span className={`detail-status status-${detail.data.status.toLowerCase().replaceAll('_', '-')}`}>{detail.data.status.replaceAll('_', ' ')}</span></div></header>
+  const viewers = otherViewers(presence, noteId, actor?.id ?? '');
+  return <section aria-labelledby="note-title" className="note-detail-page"><header className="note-detail-hero"><Link className="back-link" to="/notes">← Back to notes</Link><div className="note-title-row"><div><p className="eyebrow">Clinical note review</p><h1 id="note-title">{detail.data.patientName}</h1><p className="note-meta">Encounter {detail.data.encounterId} · Last updated {new Date(detail.data.updatedAt).toLocaleString()}</p><p aria-live="polite" data-testid="presence-indicator">{presenceLabel(viewers)}</p></div><span className={`detail-status status-${detail.data.status.toLowerCase().replaceAll('_', '-')}`}>{detail.data.status.replaceAll('_', ' ')}</span></div></header>
     {visibleActions.length > 0 ? <div className="note-actions" aria-label="Note actions">
       {visibleActions.map((item) => <span key={item.action}><button aria-describedby={item.disabledReason === null ? undefined : `${item.action}-reason`} disabled={!item.enabled || transitionPending} onClick={() => executeAction(item.action)} type="button">{actionLabels[item.action]}</button>{item.disabledReason === null ? null : <span className="sr-only" id={`${item.action}-reason`}>{item.disabledReason}</span>}</span>)}
       {canReject ? <label>Rejection reason <input onChange={(event) => setRejectReason(event.target.value)} placeholder="Required to reject" value={rejectReason} /></label> : null}
@@ -83,8 +90,7 @@ export function NoteDetailPage() {
       <div className="editor-heading"><div><p className="eyebrow">Working draft</p><h2>SOAP note</h2></div><span className={readOnly ? 'editor-state locked' : 'editor-state'}>{readOnly ? 'Read only' : 'Autosaves enabled'}</span></div>{sections.map(({ key, label }) => <label className="soap-section" key={key}><span>{label}{dirtiness?.[key] ? <span className="dirty-indicator"> Unsaved changes</span> : null}</span><textarea aria-label={label} disabled={readOnly} onChange={(event) => setDraft((current) => current === null ? current : { ...current, content: { ...current.content, [key]: event.target.value } })} value={draft?.content[key] ?? ''} /></label>)}
       <button disabled={readOnly || draft === null || dirtiness === null || !Object.values(dirtiness).some(Boolean)} type="submit">Save now</button>{saveError === null ? null : <p role="alert">{saveError} <button onClick={() => coordinatorRef.current?.retryFailed()} type="button">Retry</button></p>}
     </form>
-    <aside aria-label="Version history" className="history-sidebar"><div className="history-heading"><div><p className="eyebrow">Immutable record</p><h2>Version history</h2></div><span>{detail.data.versions.length}</span></div><p className="history-help">Select two versions to compare their changes.</p><ol>{detail.data.versions.map((version) => <li key={version.id}><label><input checked={selectedVersions.includes(version.id)} onChange={() => setSelectedVersions((current) => current.includes(version.id) ? current.filter((id) => id !== version.id) : [...current.slice(-1), version.id])} type="checkbox" /><span><strong>{version.id}</strong><small>{new Date(version.createdAt).toLocaleString()}</small></span></label></li>)}</ol>
-      {compared.length === 2 ? <VersionDiff after={compared[0]!} before={compared[1]!} /> : <p>Select two versions to compare.</p>}</aside>
+    <aside aria-label="Version history" className="history-sidebar" ref={historyRef}><div className="history-heading"><div><p className="eyebrow">Immutable record</p><h2>Version history</h2></div><span>{detail.data.versions.length}</span></div><p className="history-help">Select two versions to compare their changes.</p>{compared.length === 2 ? <VersionDiff after={compared[0]!} before={compared[1]!} /> : <p className="comparison-placeholder">Choose two versions to view their comparison here.</p>}<ol>{detail.data.versions.map((version) => <li key={version.id}><label><input checked={selectedVersions.includes(version.id)} onChange={() => setSelectedVersions((current) => current.includes(version.id) ? current.filter((selectedId) => selectedId !== version.id) : [...current.slice(-1), version.id])} type="checkbox" /><span><strong>{version.id}</strong><small>{new Date(version.createdAt).toLocaleString()}</small></span></label></li>)}</ol></aside>
     </div>
     {conflict === null ? null : <ConflictPanel conflict={conflict} onResolve={(content) => { const replay = replayConflict?.noteId === noteId ? replayConflict : null; baseVersionIdRef.current = conflict.server.id; setAcknowledged(conflict.server); setDraft({ baseVersionId: conflict.server.id, content }); if (replay !== null && JSON.stringify(content) === JSON.stringify(conflict.server.content)) void completeConflict(noteId, replay.mutationId); else if (replay !== null) resolvedReplayConflictRef.current = { noteId, mutationId: replay.mutationId }; setConflict(null); }} />}
     <section aria-label="Review timeline" className="timeline-panel"><p className="eyebrow">Audit trail</p><h2>Review timeline</h2><ol className="timeline">{[...detail.data.events, ...(optimistic === null ? [] : [optimistic.temporaryEvent])].map((event) => <li key={event.id}><time dateTime={event.occurredAt}>{new Date(event.occurredAt).toLocaleString()}</time><span><strong>{event.action.replaceAll('_', ' ')}</strong> by {event.actorId}{event.reason === null ? '' : `: ${event.reason}`}</span></li>)}</ol></section>

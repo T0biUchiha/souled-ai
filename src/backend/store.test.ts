@@ -56,6 +56,12 @@ describe('DummyBackendStore', () => {
     expect(first).toMatchObject({ ok: true, data: { parentVersionId: 'version-1-1' } });
   });
 
+  it('numbers generated versions within their note history', () => {
+    const store = new DummyBackendStore({ now });
+    const first = store.saveVersion('note-1001', { ...versionRequest('note-1001-mutation'), baseVersionId: 'version-1001-1' });
+    expect(first).toMatchObject({ ok: true, data: { id: 'version-1001-2' } });
+  });
+
   it('rejects a version save from an unauthorized actor', () => {
     const store = new DummyBackendStore({ seedCount: 1, now });
     const auditor: User = { id: 'auditor-1', displayName: 'Auditor', roles: ['READONLY_AUDITOR'] };

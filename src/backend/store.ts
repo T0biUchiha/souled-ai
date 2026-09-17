@@ -35,7 +35,6 @@ export class DummyBackendStore {
   private readonly versions = new Map<string, NoteVersion>();
   private readonly events: ReviewEvent[] = [];
   private readonly mutations = new Map<string, NoteVersion>();
-  private versionSequence = 0;
   private eventSequence = 0;
   private readonly now: () => string;
 
@@ -51,12 +50,11 @@ export class DummyBackendStore {
       this.versions.set(item.version.id, item.version);
       this.events.push(...item.events);
     }
-    this.versionSequence = count;
   }
 
   reset(): void {
     this.notes.clear(); this.versions.clear(); this.events.length = 0; this.mutations.clear();
-    this.versionSequence = 0; this.eventSequence = 0;
+    this.eventSequence = 0;
   }
 
   listNotes(query: ListNotesQuery = {}): NotePage {
@@ -116,7 +114,7 @@ export class DummyBackendStore {
       return { ok: false, status: 409, error: { error: 'version_conflict', current, commonAncestor: this.commonAncestor(current.id, request.baseVersionId) } };
     }
     const version: NoteVersion = {
-      id: `version-${++this.versionSequence}`, noteId, parentVersionId: request.baseVersionId,
+      id: this.nextVersionId(noteId), noteId, parentVersionId: request.baseVersionId,
       content: { ...request.content }, createdAt: this.now(), createdById: request.actor.id,
       amendmentReason: request.amendmentReason?.trim() || null,
     };
@@ -140,7 +138,7 @@ export class DummyBackendStore {
     const versionEffect = decision.effects.find((effect) => effect.type === 'CREATE_VERSION');
     const baseVersion = current.currentVersionId === null ? undefined : this.versions.get(current.currentVersionId);
     const createdVersion = versionEffect?.type === 'CREATE_VERSION' && baseVersion !== undefined ? {
-      id: `version-${++this.versionSequence}`, noteId, parentVersionId: baseVersion.id, content: { ...baseVersion.content },
+      id: this.nextVersionId(noteId), noteId, parentVersionId: baseVersion.id, content: { ...baseVersion.content },
       createdAt: now, createdById: request.actor?.id ?? 'system', amendmentReason: request.action.type === 'amend' ? request.action.reason?.trim() || null : null,
     } satisfies NoteVersion : undefined;
     if (createdVersion !== undefined) this.versions.set(createdVersion.id, createdVersion);
@@ -185,6 +183,11 @@ export class DummyBackendStore {
   private toSummary(stored: StoredNote): NoteSummary {
     const current = stored.note.currentVersionId === null ? undefined : this.versions.get(stored.note.currentVersionId);
     return { ...stored.note, patientName: stored.patientName, contentPreview: current === undefined ? '' : current.content.assessment };
+  }
+
+  private nextVersionId(noteId: string): string {
+    const revision = [...this.versions.values()].filter((version) => version.noteId === noteId).length + 1;
+    return `version-${noteId.replace(/^note-/, '')}-${revision}`;
   }
 
   private commonAncestor(firstId: string, secondId: string): NoteVersion | null {

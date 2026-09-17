@@ -86,6 +86,7 @@ export const createDummyBackendPlugin = (config: DummyBackendConfig = {}): Plugi
             store.reset(); return json(response, 200, { ok: true });
           }
           if (url.pathname === '/api/telemetry' && request.method === 'POST') { await readBody(request); response.statusCode = 204; response.end(); return; }
+          if (url.pathname === '/api/presence' && request.method === 'POST') { const body = await readBody(request) as { noteId?: string; userId?: string; displayName?: string; role?: import('../domain').Role; mode?: 'join' | 'leave' }; if (body.noteId === undefined || body.userId === undefined || body.mode === undefined) return json(response, 400, { error: 'invalid_request', message: 'Invalid presence request.' }); if (body.mode === 'leave') realtimeBus.leave(body.noteId, body.userId); else if (body.displayName !== undefined && body.role !== undefined) realtimeBus.join(body.noteId, { userId: body.userId, displayName: body.displayName, role: body.role, expiresAt: new Date(Date.now() + 60_000).toISOString() }); response.statusCode = 204; response.end(); return; }
           await delay();
           if (shouldFail()) return json(response, 503, { error: 'transient_server_error', message: 'Injected development failure.', retryable: true });
           if (url.pathname === '/api/notes' && request.method === 'GET') return json(response, 200, store.listNotes(queryFrom(url)));

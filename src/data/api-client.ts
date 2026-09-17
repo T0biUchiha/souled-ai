@@ -38,6 +38,7 @@ export const noteApi = {
   saveVersion: (noteId: string, payload: SaveVersionRequest): Promise<NoteVersion> => request(`/notes/${encodeURIComponent(noteId)}/versions`, { method: 'POST', body: JSON.stringify(payload) }),
   transition: (noteId: string, payload: TransitionRequest): Promise<TransitionResponse> => request(`/notes/${encodeURIComponent(noteId)}/transitions`, { method: 'POST', body: JSON.stringify(payload) }),
   bulk: (payload: BulkRequest): Promise<BulkResult> => request('/notes/bulk', { method: 'POST', body: JSON.stringify(payload) }),
+  presence: (payload: { noteId: string; userId: string; displayName?: string; role?: import('../domain').Role; mode: 'join' | 'leave' }): Promise<void> => request('/presence', { method: 'POST', body: JSON.stringify(payload) }),
   seed: (count = 5_000): Promise<{ count: number }> => request('/dev/seed', { method: 'POST', body: JSON.stringify({ count }) }),
   reset: (): Promise<{ ok: boolean }> => request('/dev/reset', { method: 'POST' }),
 };
