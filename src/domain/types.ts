@@ -24,7 +24,7 @@ export type LifecycleActionType =
   | 'amend'
   | 'grace_expired';
 
-export type NoteAction = LifecycleActionType | 'viewed';
+export type NoteAction = LifecycleActionType | 'version.created' | 'viewed';
 
 export interface User {
   id: string;

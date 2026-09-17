@@ -61,5 +61,6 @@ export type ApiResult<T> = { ok: true; data: T } | { ok: false; status: number; 
 
 export interface NoteDetail extends NoteSummary {
   currentVersion: NoteVersion | null;
+  versions: readonly NoteVersion[];
   events: readonly ReviewEvent[];
 }

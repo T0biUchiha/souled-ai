@@ -4,3 +4,4 @@ export * from './selectors';
 export * from './state-machine';
 export * from './types';
 export * from './version-graph';
+export * from './word-diff';

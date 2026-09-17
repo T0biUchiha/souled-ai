@@ -1,7 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { NoteStatus } from '../../domain';
 import type { NoteSummary } from '../../backend/contracts';
 import type { BulkRequest, NotePage } from '../../backend/contracts';
@@ -24,7 +24,7 @@ const NoteRow = memo(function NoteRow({ note, selected, pending, onToggle, style
   };
   return <div aria-busy={pending} aria-rowindex={index + 2} className="notes-row" data-note-index={index} role="row" style={style} tabIndex={0} onKeyDown={onKeyDown}>
     <div role="gridcell"><input aria-label={`Select ${note.patientName}`} checked={selected} onChange={() => onToggle(note.id)} type="checkbox" /></div>
-    <div role="gridcell">{note.patientName}</div><div role="gridcell"><span className="status-pill">{note.status}</span></div>
+    <div role="gridcell"><Link to={`/notes/${note.id}`}>{note.patientName}</Link></div><div role="gridcell"><span className="status-pill">{note.status}</span></div>
     <div role="gridcell">{new Date(note.updatedAt).toLocaleString()}</div><div role="gridcell">{new Date(note.createdAt).toLocaleDateString()}</div>
   </div>;
 });

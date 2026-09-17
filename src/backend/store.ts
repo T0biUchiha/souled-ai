@@ -89,7 +89,8 @@ export class DummyBackendStore {
     const stored = this.notes.get(noteId);
     if (stored === undefined) return { ok: false, status: 404, error: { error: 'not_found', message: 'Note not found.' } };
     const currentVersion = stored.note.currentVersionId === null ? null : this.versions.get(stored.note.currentVersionId) ?? null;
-    return { ok: true, data: { ...this.toSummary(stored), currentVersion, events: this.events.filter((event) => event.noteId === noteId) } };
+    const versions = [...this.versions.values()].filter((version) => version.noteId === noteId).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    return { ok: true, data: { ...this.toSummary(stored), currentVersion, versions, events: this.events.filter((event) => event.noteId === noteId) } };
   }
 
   saveVersion(noteId: string, request: SaveVersionRequest): ApiResult<NoteVersion> {
@@ -109,7 +110,7 @@ export class DummyBackendStore {
     };
     this.versions.set(version.id, version); this.mutations.set(request.clientMutationId, version);
     stored.note = { ...stored.note, currentVersionId: version.id, updatedAt: version.createdAt };
-    this.appendEvent(stored.note, version.id, 'viewed', request.actor.id, null, stored.note.status, stored.note.status, { clientMutationId: request.clientMutationId });
+    this.appendEvent(stored.note, version.id, 'version.created', request.actor.id, null, stored.note.status, stored.note.status, { clientMutationId: request.clientMutationId });
     return { ok: true, data: version };
   }
 
@@ -123,12 +124,20 @@ export class DummyBackendStore {
     const reviewerEffect = decision.effects.find((effect) => effect.type === 'ASSIGN_REVIEWER');
     const releaseReviewer = decision.effects.some((effect) => effect.type === 'RELEASE_REVIEWER');
     const current = stored.note;
+    const versionEffect = decision.effects.find((effect) => effect.type === 'CREATE_VERSION');
+    const baseVersion = current.currentVersionId === null ? undefined : this.versions.get(current.currentVersionId);
+    const createdVersion = versionEffect?.type === 'CREATE_VERSION' && baseVersion !== undefined ? {
+      id: `version-${++this.versionSequence}`, noteId, parentVersionId: baseVersion.id, content: { ...baseVersion.content },
+      createdAt: now, createdById: request.actor?.id ?? 'system', amendmentReason: request.action.type === 'amend' ? request.action.reason?.trim() || null : null,
+    } satisfies NoteVersion : undefined;
+    if (createdVersion !== undefined) this.versions.set(createdVersion.id, createdVersion);
     stored.note = {
       ...current, status: decision.nextStatus, updatedAt: now,
       assignedReviewerId: reviewerEffect?.type === 'ASSIGN_REVIEWER' ? reviewerEffect.reviewerId : releaseReviewer ? null : current.assignedReviewerId,
       approvedAt: decision.nextStatus === 'APPROVED' ? now : current.approvedAt,
+      currentVersionId: createdVersion?.id ?? current.currentVersionId,
     };
-    this.appendEvent(stored.note, stored.note.currentVersionId, request.action.type, request.actor?.id ?? 'system', request.action.type === 'reject' ? request.action.reason?.trim() || null : null, current.status, stored.note.status, { source });
+    this.appendEvent(stored.note, stored.note.currentVersionId, request.action.type, request.actor?.id ?? 'system', request.action.type === 'reject' || request.action.type === 'amend' ? request.action.reason?.trim() || null : null, current.status, stored.note.status, { source });
     return { ok: true, data: stored.note };
   }
 
