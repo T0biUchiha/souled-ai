@@ -1,7 +1,7 @@
 import { evaluateTransition, type TransitionDecision } from '../domain/state-machine';
 import type { Note, NoteVersion, ReviewEvent } from '../domain';
 import type {
-  ApiResult, BulkRequest, BulkResult, ListNotesQuery, NoteDetail, NotePage, NoteSummary, SaveVersionRequest, TransitionRequest,
+  ApiResult, BulkRequest, BulkResult, ListNotesQuery, NoteDetail, NotePage, NoteSummary, SaveVersionRequest, TransitionRequest, TransitionResponse,
 } from './contracts';
 import { createSeedData } from './seed';
 
@@ -114,7 +114,7 @@ export class DummyBackendStore {
     return { ok: true, data: version };
   }
 
-  transition(noteId: string, request: TransitionRequest): ApiResult<Note> {
+  transition(noteId: string, request: TransitionRequest): ApiResult<TransitionResponse> {
     const stored = this.notes.get(noteId);
     if (stored === undefined) return { ok: false, status: 404, error: { error: 'not_found', message: 'Note not found.' } };
     const source = request.source ?? 'USER';
@@ -137,8 +137,8 @@ export class DummyBackendStore {
       approvedAt: decision.nextStatus === 'APPROVED' ? now : current.approvedAt,
       currentVersionId: createdVersion?.id ?? current.currentVersionId,
     };
-    this.appendEvent(stored.note, stored.note.currentVersionId, request.action.type, request.actor?.id ?? 'system', request.action.type === 'reject' || request.action.type === 'amend' ? request.action.reason?.trim() || null : null, current.status, stored.note.status, { source });
-    return { ok: true, data: stored.note };
+    const event = this.appendEvent(stored.note, stored.note.currentVersionId, request.action.type, request.actor?.id ?? 'system', request.action.type === 'reject' || request.action.type === 'amend' ? request.action.reason?.trim() || null : null, current.status, stored.note.status, { source });
+    return { ok: true, data: { note: stored.note, event } };
   }
 
   bulk(request: BulkRequest): ApiResult<BulkResult> {
@@ -153,7 +153,7 @@ export class DummyBackendStore {
         updated.push(stored.note); continue;
       }
       const result = this.transition(noteId, { action: { type: 'regenerate' }, actor: request.actor });
-      if (result.ok) updated.push(result.data); else skipped.push(noteId);
+      if (result.ok) updated.push(result.data.note); else skipped.push(noteId);
     }
     return { ok: true, data: { updated, skipped } };
   }
@@ -178,7 +178,8 @@ export class DummyBackendStore {
     return null;
   }
 
-  private appendEvent(note: Note, versionId: string | null, action: ReviewEvent['action'], actorId: string, reason: string | null, fromStatus: Note['status'], toStatus: Note['status'], metadata: ReviewEvent['metadata']): void {
-    this.events.push({ id: `event-${++this.eventSequence}`, noteId: note.id, versionId, action, actorId, occurredAt: this.now(), fromStatus, toStatus, reason, metadata });
+  private appendEvent(note: Note, versionId: string | null, action: ReviewEvent['action'], actorId: string, reason: string | null, fromStatus: Note['status'], toStatus: Note['status'], metadata: ReviewEvent['metadata']): ReviewEvent {
+    const event: ReviewEvent = { id: `event-${++this.eventSequence}`, noteId: note.id, versionId, action, actorId, occurredAt: this.now(), fromStatus, toStatus, reason, metadata };
+    this.events.push(event); return event;
   }
 }

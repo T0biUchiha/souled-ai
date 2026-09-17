@@ -1,7 +1,7 @@
 import type {
-  ApiError, BulkRequest, BulkResult, ListNotesQuery, NoteDetail, NotePage, SaveVersionRequest, TransitionRequest,
+  ApiError, BulkRequest, BulkResult, ListNotesQuery, NoteDetail, NotePage, SaveVersionRequest, TransitionRequest, TransitionResponse,
 } from '../backend/contracts';
-import type { Note, NoteVersion } from '../domain';
+import type { NoteVersion } from '../domain';
 
 export class ApiClientError extends Error {
   constructor(readonly status: number, readonly payload: ApiError) {
@@ -31,7 +31,7 @@ export const noteApi = {
   list: (query: ListNotesQuery = {}, signal?: AbortSignal): Promise<NotePage> => request(`/notes${queryString(query)}`, signal === undefined ? undefined : { signal }),
   get: (noteId: string): Promise<NoteDetail> => request(`/notes/${encodeURIComponent(noteId)}`),
   saveVersion: (noteId: string, payload: SaveVersionRequest): Promise<NoteVersion> => request(`/notes/${encodeURIComponent(noteId)}/versions`, { method: 'POST', body: JSON.stringify(payload) }),
-  transition: (noteId: string, payload: TransitionRequest): Promise<Note> => request(`/notes/${encodeURIComponent(noteId)}/transitions`, { method: 'POST', body: JSON.stringify(payload) }),
+  transition: (noteId: string, payload: TransitionRequest): Promise<TransitionResponse> => request(`/notes/${encodeURIComponent(noteId)}/transitions`, { method: 'POST', body: JSON.stringify(payload) }),
   bulk: (payload: BulkRequest): Promise<BulkResult> => request('/notes/bulk', { method: 'POST', body: JSON.stringify(payload) }),
   seed: (count = 5_000): Promise<{ count: number }> => request('/dev/seed', { method: 'POST', body: JSON.stringify({ count }) }),
   reset: (): Promise<{ ok: boolean }> => request('/dev/reset', { method: 'POST' }),

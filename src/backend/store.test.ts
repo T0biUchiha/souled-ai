@@ -58,6 +58,6 @@ describe('DummyBackendStore', () => {
     const forbidden = store.transition('note-3', { action: { type: 'start_review' }, actor: clinician });
     const allowed = store.transition('note-4', { action: { type: 'approve' }, actor: reviewer, mfaReauthenticated: true });
     expect(forbidden).toMatchObject({ ok: false, status: 403, error: { error: 'forbidden' } });
-    expect(allowed).toMatchObject({ ok: true, data: { status: 'APPROVED', assignedReviewerId: null } });
+    expect(allowed).toMatchObject({ ok: true, data: { note: { status: 'APPROVED', assignedReviewerId: null }, event: { action: 'approve' } } });
   });
 });

@@ -38,6 +38,7 @@ export interface TransitionRequest {
   source?: TransitionSource;
   mfaReauthenticated?: boolean;
 }
+export interface TransitionResponse { note: Note; event: ReviewEvent }
 
 export interface BulkRequest {
   operation: 'assign_reviewer' | 'regenerate';
