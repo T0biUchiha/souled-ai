@@ -9,6 +9,8 @@ npm install
 npm run dev
 ```
 
+The Vite development server includes a deterministic in-memory dummy API. It seeds 5,000 notes at startup and supports `POST /api/dev/seed` (with `{ "count": 100000 }`, for example) and `POST /api/dev/reset` for simulation. Configure latency and failure injection in `vite.config.ts` through `createDummyBackendPlugin` when exercising loading and retry states.
+
 Useful checks:
 
 ```sh
@@ -24,6 +26,7 @@ npm test
 src/
 ├── app/                    # Application composition: providers, router, shell
 ├── auth/                   # Small client-only session state
+├── backend/                 # Vite-only dummy API, seed data, contracts, in-memory store
 ├── data/                   # API adapters and persistent offline storage
 ├── domain/                 # Framework-independent model and workflow policy
 │   ├── types.ts            # Note, NoteVersion, ReviewEvent, SOAP, identities
