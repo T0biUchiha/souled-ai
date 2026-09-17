@@ -1,8 +1,12 @@
-import { Link, Outlet } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import './styles.css';
 import { ConnectivityStatus } from '../data/offline-sync';
+import { telemetry } from '../telemetry/client';
 
 export function AppShell() {
+  const location = useLocation();
+  useEffect(() => { telemetry.track('route_viewed', { path: location.pathname }); }, [location.pathname]);
   return (
     <div className="app-shell">
       <header className="app-header">

@@ -82,6 +82,7 @@ export const createDummyBackendPlugin = (config: DummyBackendConfig = {}): Plugi
           if (url.pathname === '/api/dev/reset' && request.method === 'POST') {
             store.reset(); return json(response, 200, { ok: true });
           }
+          if (url.pathname === '/api/telemetry' && request.method === 'POST') { await readBody(request); response.statusCode = 204; response.end(); return; }
           await delay();
           if (shouldFail()) return json(response, 503, { error: 'transient_server_error', message: 'Injected development failure.', retryable: true });
           if (url.pathname === '/api/notes' && request.method === 'GET') return json(response, 200, store.listNotes(queryFrom(url)));
