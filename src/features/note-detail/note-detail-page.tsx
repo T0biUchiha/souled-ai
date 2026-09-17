@@ -9,6 +9,9 @@ import { dirtySections, type SoapSection, type WorkingDraft } from './draft';
 import { beginOptimisticTransition, reconcileTransitionEvents } from './optimistic-transition';
 import { SaveCoordinator } from './save-coordinator';
 import { resolveVersionConflict, type VersionConflict } from './conflict-resolution';
+import { queueVersionSave } from '../../data/offline-queue';
+import { queueTransition } from '../../data/offline-queue';
+import { useOfflineSync } from '../../data/offline-sync';
 import './note-detail.css';
 
 const sections: ReadonlyArray<{ key: SoapSection; label: string }> = [
@@ -22,14 +25,16 @@ const mutationId = (): string => globalThis.crypto?.randomUUID?.() ?? `mutation-
 
 export function NoteDetailPage() {
   const { noteId = '' } = useParams(); const queryClient = useQueryClient();
+  const { online, refreshQueue, replayConflict } = useOfflineSync();
   const detail = useQuery({ queryKey: ['note', noteId], queryFn: () => noteApi.get(noteId), enabled: noteId !== '' });
   const [draft, setDraft] = useState<WorkingDraft | null>(null); const [rejectReason, setRejectReason] = useState('');
   const [selectedVersions, setSelectedVersions] = useState<readonly string[]>([]);
   const [acknowledged, setAcknowledged] = useState<NoteVersion | null>(null); const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<VersionConflict | null>(null);
   const [optimistic, setOptimistic] = useState<ReturnType<typeof beginOptimisticTransition> | null>(null); const [transitionError, setTransitionError] = useState<string | null>(null); const [transitionPending, setTransitionPending] = useState(false);
-  const initializedNoteId = useRef<string | null>(null); const draftRef = useRef<WorkingDraft | null>(null); const baseVersionIdRef = useRef(''); const coordinatorRef = useRef<SaveCoordinator<SoapContent, NoteVersion> | null>(null);
+  const initializedNoteId = useRef<string | null>(null); const draftRef = useRef<WorkingDraft | null>(null); const baseVersionIdRef = useRef(''); const coordinatorRef = useRef<SaveCoordinator<SoapContent, NoteVersion | { queued: true }> | null>(null);
   useEffect(() => { draftRef.current = draft; }, [draft]);
+  useEffect(() => { if (replayConflict !== null && replayConflict.noteId === noteId && draftRef.current !== null) setConflict({ commonAncestor: replayConflict.commonAncestor, server: replayConflict.current, local: draftRef.current }); }, [noteId, replayConflict]);
   useEffect(() => { if (detail.data?.currentVersion !== null && detail.data?.currentVersion !== undefined && initializedNoteId.current !== noteId) { initializedNoteId.current = noteId; const initial = { baseVersionId: detail.data.currentVersion.id, content: { ...detail.data.currentVersion.content } }; baseVersionIdRef.current = initial.baseVersionId; setAcknowledged(detail.data.currentVersion); setDraft(initial); setConflict(null); } }, [detail.data?.currentVersion, noteId]);
   const actor: User | null = useMemo(() => detail.data === undefined ? null : { id: detail.data.assignedReviewerId ?? 'reviewer-1', displayName: 'Demo review user', roles: ['CLINICIAN', 'REVIEWER', 'ADMIN'] }, [detail.data]);
   const displayedNote = optimistic?.optimisticNote ?? detail.data;
@@ -41,9 +46,9 @@ export function NoteDetailPage() {
   useEffect(() => {
     if (actor === null) return;
     coordinatorRef.current?.dispose();
-    coordinatorRef.current = new SaveCoordinator<SoapContent, NoteVersion>({ debounceMs: 700, prepare: (content) => ({ baseVersionId: baseVersionIdRef.current, content, clientMutationId: mutationId() }), save: (request) => noteApi.saveVersion(noteId, { ...request, actor }), onSaved: (version) => { baseVersionIdRef.current = version.id; setAcknowledged(version); setSaveError(null); refresh(); }, onFailed: (error) => { if (error instanceof ApiClientError && error.payload.error === 'version_conflict' && draftRef.current !== null) setConflict({ commonAncestor: error.payload.commonAncestor, server: error.payload.current, local: draftRef.current }); setSaveError(error instanceof Error ? error.message : 'Unable to save draft.'); } });
+    coordinatorRef.current = new SaveCoordinator<SoapContent, NoteVersion | { queued: true }>({ debounceMs: 700, prepare: (content) => ({ baseVersionId: baseVersionIdRef.current, content, clientMutationId: mutationId() }), save: async (request) => { if (!online) { await queueVersionSave(noteId, { ...request, actor }); await refreshQueue(); return { queued: true }; } return noteApi.saveVersion(noteId, { ...request, actor }); }, onSaved: (result) => { if ('queued' in result) { setSaveError(null); return; } baseVersionIdRef.current = result.id; setAcknowledged(result); setSaveError(null); refresh(); }, onFailed: (error) => { if (error instanceof ApiClientError && error.payload.error === 'version_conflict' && draftRef.current !== null) setConflict({ commonAncestor: error.payload.commonAncestor, server: error.payload.current, local: draftRef.current }); setSaveError(error instanceof Error ? error.message : 'Unable to save draft.'); } });
     return () => coordinatorRef.current?.dispose();
-  }, [actor, noteId, refresh]);
+  }, [actor, noteId, online, refresh, refreshQueue]);
   useEffect(() => { if (draft !== null && dirtiness !== null && Object.values(dirtiness).some(Boolean) && conflict === null) coordinatorRef.current?.schedule(draft.content); }, [conflict, dirtiness, draft]);
   const executeAction = (type: TransitionAction['type']): void => {
     const action: TransitionAction = type === 'reject' ? { type, reason: rejectReason } : { type };
@@ -51,6 +56,7 @@ export function NoteDetailPage() {
     const transaction = beginOptimisticTransition(context, action, `temporary-${mutationId()}`);
     if (transaction === null) return;
     setTransitionError(null); setOptimistic(transaction); setTransitionPending(true);
+    if (!online) { void queueTransition(noteId, { action, actor, mfaReauthenticated: true }, transaction.temporaryEvent.id).then(async () => { await refreshQueue(); setTransitionPending(false); }); return; }
     void noteApi.transition(noteId, { action, actor, mfaReauthenticated: true }).then((response) => {
       queryClient.setQueryData(['note', noteId], (previous: typeof detail.data | undefined) => previous === undefined ? previous : { ...previous, ...response.note, events: reconcileTransitionEvents([...previous.events, transaction.temporaryEvent], transaction.temporaryEvent.id, response.event) });
       setOptimistic(null); setTransitionPending(false); refresh();

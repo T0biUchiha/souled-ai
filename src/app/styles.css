@@ -8,5 +8,6 @@
 body { margin: 0; }
 .app-shell { min-height: 100vh; }
 .app-header { background: #102a43; padding: 1rem 2rem; }
+.connectivity-status { color: #dbeafe; display: inline; font-size: .85rem; margin-left: 1rem; }
 .brand { color: #fff; font-weight: 700; text-decoration: none; }
 .app-main { margin: 0 auto; max-width: 72rem; padding: 3rem 2rem; }

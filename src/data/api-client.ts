@@ -2,6 +2,7 @@ import type {
   ApiError, BulkRequest, BulkResult, ListNotesQuery, NoteDetail, NotePage, SaveVersionRequest, TransitionRequest, TransitionResponse,
 } from '../backend/contracts';
 import type { NoteVersion } from '../domain';
+import { offlineDb } from './offline-db';
 
 export class ApiClientError extends Error {
   constructor(readonly status: number, readonly payload: ApiError) {
@@ -29,7 +30,11 @@ const queryString = (query: ListNotesQuery): string => {
 
 export const noteApi = {
   list: (query: ListNotesQuery = {}, signal?: AbortSignal): Promise<NotePage> => request(`/notes${queryString(query)}`, signal === undefined ? undefined : { signal }),
-  get: (noteId: string): Promise<NoteDetail> => request(`/notes/${encodeURIComponent(noteId)}`),
+  get: async (noteId: string): Promise<NoteDetail> => {
+    if (!navigator.onLine) { const cached = await offlineDb.noteSnapshots.get(noteId); if (cached !== undefined) return cached; }
+    const detail = await request<NoteDetail>(`/notes/${encodeURIComponent(noteId)}`);
+    await offlineDb.noteSnapshots.put(detail); return detail;
+  },
   saveVersion: (noteId: string, payload: SaveVersionRequest): Promise<NoteVersion> => request(`/notes/${encodeURIComponent(noteId)}/versions`, { method: 'POST', body: JSON.stringify(payload) }),
   transition: (noteId: string, payload: TransitionRequest): Promise<TransitionResponse> => request(`/notes/${encodeURIComponent(noteId)}/transitions`, { method: 'POST', body: JSON.stringify(payload) }),
   bulk: (payload: BulkRequest): Promise<BulkResult> => request('/notes/bulk', { method: 'POST', body: JSON.stringify(payload) }),

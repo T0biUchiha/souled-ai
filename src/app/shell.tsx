@@ -1,5 +1,6 @@
 import { Link, Outlet } from 'react-router-dom';
 import './styles.css';
+import { ConnectivityStatus } from '../data/offline-sync';
 
 export function AppShell() {
   return (
@@ -9,6 +10,7 @@ export function AppShell() {
           Clinical Note Review
         </Link>
         {' · '}<Link className="brand" to="/notes">Notes</Link>
+        <ConnectivityStatus />
       </header>
       <main className="app-main">
         <Outlet />
