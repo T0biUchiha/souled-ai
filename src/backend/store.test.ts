@@ -33,6 +33,19 @@ describe('DummyBackendStore', () => {
     expect(sorted.map((item) => `${item.patientName}/${item.id}`)).toEqual([...sorted].map((item) => `${item.patientName}/${item.id}`).sort());
   });
 
+  it('treats date-only filters as full calendar days', () => {
+    const store = new DummyBackendStore({ seedCount: 3, now });
+    const onJanuaryFirst = store.listNotes({ from: '2026-01-01', to: '2026-01-01', sort: 'updatedAt', direction: 'asc' });
+    expect(onJanuaryFirst.items).toHaveLength(3);
+    expect(store.listNotes({ to: '2025-12-31' }).items).toHaveLength(0);
+  });
+
+  it('rejects bulk assignment to an unknown reviewer', () => {
+    const store = new DummyBackendStore({ seedCount: 1, now });
+    const result = store.bulk({ operation: 'assign_reviewer', noteIds: ['note-1'], reviewerId: 'not-a-reviewer', actor: clinician });
+    expect(result).toMatchObject({ ok: false, status: 400, error: { error: 'invalid_request' } });
+  });
+
   it('makes version writes idempotent by client mutation ID', () => {
     const store = new DummyBackendStore({ seedCount: 1, now });
     const initial = store.getNote('note-1');

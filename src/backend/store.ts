@@ -5,6 +5,7 @@ import type {
 } from './contracts';
 import { createSeedData } from './seed';
 import { realtimeBus } from './realtime';
+import { isDemoReviewer } from '../auth/demo-reviewers';
 
 export interface DummyBackendOptions { seedCount?: number; now?: () => string }
 
@@ -12,6 +13,10 @@ type StoredNote = { note: Note; patientName: string };
 
 const defaultNow = (): string => new Date().toISOString();
 const compare = (left: string, right: string): number => left.localeCompare(right);
+const dateBoundary = (value: string | undefined, boundary: 'start' | 'end'): string | undefined => {
+  if (value === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return `${value}T${boundary === 'start' ? '00:00:00.000' : '23:59:59.999'}Z`;
+};
 const encodeCursor = (value: string, id: string): string => Buffer.from(JSON.stringify({ value, id })).toString('base64url');
 const decodeCursor = (cursor: string): { value: string; id: string } | null => {
   try {
@@ -57,6 +62,8 @@ export class DummyBackendStore {
     const limit = Math.max(1, Math.min(query.limit ?? 50, 200));
     const sort = query.sort ?? 'updatedAt';
     const direction = query.direction ?? 'desc';
+    const from = dateBoundary(query.from, 'start');
+    const to = dateBoundary(query.to, 'end');
     const matched = [...this.notes.values()].filter(({ note, patientName }) => {
       const current = note.currentVersionId === null ? undefined : this.versions.get(note.currentVersionId);
       const haystack = `${patientName} ${current === undefined ? '' : Object.values(current.content).join(' ')}`.toLowerCase();
@@ -64,8 +71,8 @@ export class DummyBackendStore {
         && (query.reviewerId === undefined || note.assignedReviewerId === query.reviewerId)
         && (query.patient === undefined || patientName.toLowerCase().includes(query.patient.toLowerCase()))
         && (query.search === undefined || haystack.includes(query.search.toLowerCase()))
-        && (query.from === undefined || note.updatedAt >= query.from)
-        && (query.to === undefined || note.updatedAt <= query.to);
+        && (from === undefined || note.updatedAt >= from)
+        && (to === undefined || note.updatedAt <= to);
     }).sort((left, right) => {
       const leftValue = sort === 'patientName' ? left.patientName : String(left.note[sort]);
       const rightValue = sort === 'patientName' ? right.patientName : String(right.note[sort]);
@@ -146,13 +153,16 @@ export class DummyBackendStore {
   }
 
   bulk(request: BulkRequest): ApiResult<BulkResult> {
+    if (request.operation === 'assign_reviewer' && (request.reviewerId === undefined || !isDemoReviewer(request.reviewerId))) {
+      return { ok: false, status: 400, error: { error: 'invalid_request', message: 'Select a reviewer from the available reviewer list.' } };
+    }
     const updated: Note[] = [];
     const skipped: string[] = [];
     for (const noteId of request.noteIds) {
       const stored = this.notes.get(noteId);
       if (stored === undefined) { skipped.push(noteId); continue; }
       if (request.operation === 'assign_reviewer') {
-        if (request.reviewerId === undefined || request.reviewerId === '') { skipped.push(noteId); continue; }
+        if (request.reviewerId === undefined) { skipped.push(noteId); continue; }
         stored.note = { ...stored.note, assignedReviewerId: request.reviewerId, updatedAt: this.now() };
         updated.push(stored.note); continue;
       }

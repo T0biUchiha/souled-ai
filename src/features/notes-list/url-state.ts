@@ -11,7 +11,8 @@ export const defaultNotesListUrlState: NotesListUrlState = {
 };
 
 export const parseNotesListUrlState = (params: URLSearchParams): NotesListUrlState => {
-  const status = params.get('status')?.split(',').filter(Boolean);
+  const statusValue = params.get('status');
+  const status = statusValue === null ? undefined : statusValue.split(',').filter(Boolean);
   const state: NotesListUrlState = {
     search: params.get('q') ?? '',
     sort: (params.get('sort') ?? defaultNotesListUrlState.sort) as NotesListUrlState['sort'],
@@ -28,7 +29,7 @@ export const parseNotesListUrlState = (params: URLSearchParams): NotesListUrlSta
 
 export const notesListUrlParams = (state: NotesListUrlState): URLSearchParams => {
   const params = new URLSearchParams();
-  if (state.statuses !== undefined && state.statuses.length > 0) params.set('status', state.statuses.join(','));
+  if (state.statuses !== undefined) params.set('status', state.statuses.join(','));
   if (state.reviewerId !== undefined && state.reviewerId !== '') params.set('reviewer', state.reviewerId);
   if (state.patient !== undefined && state.patient !== '') params.set('patient', state.patient);
   if (state.from !== undefined && state.from !== '') params.set('from', state.from);

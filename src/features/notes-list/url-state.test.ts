@@ -16,4 +16,10 @@ describe('Notes List URL state', () => {
     const second = parseNotesListUrlState(new URLSearchParams('q=Jordan'));
     expect(notesListQueryKey(first)).not.toEqual(notesListQueryKey(second));
   });
+
+  it('preserves an explicit empty status selection', () => {
+    const state = parseNotesListUrlState(new URLSearchParams('status='));
+    expect(state.statuses).toEqual([]);
+    expect(notesListUrlParams(state).toString()).toContain('status=');
+  });
 });

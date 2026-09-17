@@ -36,7 +36,10 @@ const queryFrom = (url: URL): ListNotesQuery => {
   const query: ListNotesQuery = {};
   const cursor = url.searchParams.get('cursor'); if (cursor !== null) query.cursor = cursor;
   const limit = url.searchParams.get('limit'); if (limit !== null) query.limit = Number(limit);
-  const statuses = list(url.searchParams.get('status') ?? undefined); if (statuses !== undefined) query.statuses = statuses as NonNullable<ListNotesQuery['statuses']>;
+  const statusValue = url.searchParams.get('status');
+  const statuses = list(statusValue ?? undefined);
+  if (statusValue === '') query.statuses = [];
+  else if (statuses !== undefined) query.statuses = statuses as NonNullable<ListNotesQuery['statuses']>;
   const reviewer = url.searchParams.get('reviewer'); if (reviewer !== null) query.reviewerId = reviewer;
   const patient = url.searchParams.get('patient'); if (patient !== null) query.patient = patient;
   const from = url.searchParams.get('from'); if (from !== null) query.from = from;
