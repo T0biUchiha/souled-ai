@@ -1,7 +1,7 @@
 import { evaluateTransition, type TransitionDecision } from '../domain/state-machine';
 import type { Note, NoteVersion, ReviewEvent } from '../domain';
 import type {
-  ApiResult, ListNotesQuery, NoteDetail, NotePage, NoteSummary, SaveVersionRequest, TransitionRequest,
+  ApiResult, BulkRequest, BulkResult, ListNotesQuery, NoteDetail, NotePage, NoteSummary, SaveVersionRequest, TransitionRequest,
 } from './contracts';
 import { createSeedData } from './seed';
 
@@ -130,6 +130,23 @@ export class DummyBackendStore {
     };
     this.appendEvent(stored.note, stored.note.currentVersionId, request.action.type, request.actor?.id ?? 'system', request.action.type === 'reject' ? request.action.reason?.trim() || null : null, current.status, stored.note.status, { source });
     return { ok: true, data: stored.note };
+  }
+
+  bulk(request: BulkRequest): ApiResult<BulkResult> {
+    const updated: Note[] = [];
+    const skipped: string[] = [];
+    for (const noteId of request.noteIds) {
+      const stored = this.notes.get(noteId);
+      if (stored === undefined) { skipped.push(noteId); continue; }
+      if (request.operation === 'assign_reviewer') {
+        if (request.reviewerId === undefined || request.reviewerId === '') { skipped.push(noteId); continue; }
+        stored.note = { ...stored.note, assignedReviewerId: request.reviewerId, updatedAt: this.now() };
+        updated.push(stored.note); continue;
+      }
+      const result = this.transition(noteId, { action: { type: 'regenerate' }, actor: request.actor });
+      if (result.ok) updated.push(result.data); else skipped.push(noteId);
+    }
+    return { ok: true, data: { updated, skipped } };
   }
 
   private transitionFailure(decision: Extract<TransitionDecision, { allowed: false }>): ApiResult<never> {

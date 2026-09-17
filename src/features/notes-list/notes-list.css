@@ -1,0 +1,13 @@
+.notes-filters { display: flex; flex-wrap: wrap; gap: .75rem; margin-block: 1rem; }
+.notes-filters label { display: grid; font-size: .875rem; gap: .25rem; }
+.notes-grid { border: 1px solid #cbd5e1; height: 32rem; overflow: auto; }
+.bulk-toolbar { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; }
+.notes-header, .notes-row { display: grid; grid-template-columns: 4rem minmax(12rem, 1.4fr) minmax(10rem, 1fr) minmax(12rem, 1.2fr) minmax(9rem, 1fr); align-items: center; min-width: 52rem; }
+.notes-header { background: #e8eef6; min-height: 3rem; position: sticky; top: 0; z-index: 1; }
+.notes-header > *, .notes-row > * { padding: .5rem .75rem; text-align: left; }
+.notes-header button { border: 0; background: transparent; font: inherit; font-weight: 700; cursor: pointer; }
+.notes-row { border-top: 1px solid #e2e8f0; background: #fff; }
+.notes-row[aria-busy="true"] { opacity: .65; }
+.notes-row:focus { outline: 2px solid #2563eb; outline-offset: -2px; }
+.status-pill { background: #e2e8f0; border-radius: 999px; font-size: .75rem; padding: .2rem .4rem; white-space: nowrap; }
+.notes-skeleton, .notes-empty { border: 1px solid #cbd5e1; padding: 2rem; }

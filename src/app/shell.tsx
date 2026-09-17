@@ -8,6 +8,7 @@ export function AppShell() {
         <Link className="brand" to="/">
           Clinical Note Review
         </Link>
+        {' · '}<Link className="brand" to="/notes">Notes</Link>
       </header>
       <main className="app-main">
         <Outlet />

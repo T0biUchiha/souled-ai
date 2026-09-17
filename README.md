@@ -45,6 +45,10 @@ src/
 
 The lifecycle machine and a Mermaid diagram are documented in [src/domain/STATE_MACHINE.md](src/domain/STATE_MACHINE.md).
 
+### Notes List performance
+
+`/notes` uses cursor-based `useInfiniteQuery` pages (50 records by default) and TanStack Virtual. The browser retains only fetched pages and mounts only the visible rows plus a small overscan buffer; it never requests an unbounded/all-notes endpoint. Filters, search, and sort are part of both the URL and query key. Query cancellation uses the `AbortSignal` supplied by TanStack Query, so stale search/filter requests cannot replace the active query's data. Selection is ID-based and intentionally persists while paging or changing filters; hidden selected items remain counted until a bulk operation succeeds or the user deselects them.
+
 ### State ownership
 
 | State | Home | Reason |

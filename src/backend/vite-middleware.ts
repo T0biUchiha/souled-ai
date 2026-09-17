@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
-import type { ListNotesQuery, SaveVersionRequest, TransitionRequest } from './contracts';
+import type { BulkRequest, ListNotesQuery, SaveVersionRequest, TransitionRequest } from './contracts';
 import { DummyBackendStore } from './store';
 import { mulberry32 } from './seed';
 
@@ -76,6 +76,10 @@ export const createDummyBackendPlugin = (config: DummyBackendConfig = {}): Plugi
           await delay();
           if (shouldFail()) return json(response, 503, { error: 'transient_server_error', message: 'Injected development failure.', retryable: true });
           if (url.pathname === '/api/notes' && request.method === 'GET') return json(response, 200, store.listNotes(queryFrom(url)));
+          if (url.pathname === '/api/notes/bulk' && request.method === 'POST') {
+            const result = store.bulk(await readBody(request) as BulkRequest);
+            return json(response, result.ok ? 200 : result.status, result.ok ? result.data : result.error);
+          }
           const match = /^\/api\/notes\/([^/]+)(?:\/(versions|transitions))?$/.exec(url.pathname);
           if (match === null) return json(response, 404, { error: 'not_found', message: 'Endpoint not found.' });
           const noteId = decodeURIComponent(match[1]!);

@@ -24,6 +24,15 @@ describe('DummyBackendStore', () => {
     expect(nextPage.items.map((item) => item.id)).not.toContain(firstPage.items[0]!.id);
   });
 
+  it('filters, searches, and stable-sorts on the server', () => {
+    const store = new DummyBackendStore({ now });
+    const filtered = store.listNotes({ statuses: ['FAILED'], patient: 'Jordan', search: 'follow-up', sort: 'patientName', direction: 'asc' });
+    expect(filtered.items.length).toBeGreaterThan(0);
+    expect(filtered.items.every((item) => item.status === 'FAILED' && item.patientName.includes('Jordan'))).toBe(true);
+    const sorted = store.listNotes({ limit: 20, sort: 'patientName', direction: 'asc' }).items;
+    expect(sorted.map((item) => `${item.patientName}/${item.id}`)).toEqual([...sorted].map((item) => `${item.patientName}/${item.id}`).sort());
+  });
+
   it('makes version writes idempotent by client mutation ID', () => {
     const store = new DummyBackendStore({ seedCount: 1, now });
     const initial = store.getNote('note-1');

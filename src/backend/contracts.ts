@@ -39,6 +39,15 @@ export interface TransitionRequest {
   mfaReauthenticated?: boolean;
 }
 
+export interface BulkRequest {
+  operation: 'assign_reviewer' | 'regenerate';
+  noteIds: readonly string[];
+  reviewerId?: string;
+  actor: User;
+}
+
+export interface BulkResult { updated: readonly Note[]; skipped: readonly string[] }
+
 export type ApiError =
   | { error: 'not_found'; message: string }
   | { error: 'forbidden'; message: string }
