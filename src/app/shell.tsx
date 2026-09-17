@@ -6,7 +6,9 @@ import { telemetry } from '../telemetry/client';
 
 export function AppShell() {
   const location = useLocation();
-  useEffect(() => { telemetry.track('route_viewed', { path: location.pathname }); }, [location.pathname]);
+  useEffect(() => {
+    void telemetry.onRouteChange().finally(() => telemetry.track('route_viewed', { path: location.pathname }));
+  }, [location.pathname]);
   return (
     <div className="app-shell">
       <header className="app-header">

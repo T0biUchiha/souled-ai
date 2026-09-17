@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { Note, NoteVersion, ReviewEvent } from '../domain';
 import type { NoteDetail, SaveVersionRequest, TransitionRequest } from '../backend/contracts';
+import type { SoapContent } from '../domain';
 
 export type QueuedMutation = {
   id: string;
@@ -15,6 +16,7 @@ export type QueuedMutation = {
   lastError: string | null;
 };
 export type PersistedTelemetryBatch = { id: string; events: readonly unknown[]; attempts: number; createdAt: string; lastError: string | null };
+export type PersistedNoteDraft = { noteId: string; baseVersionId: string; content: SoapContent; updatedAt: number };
 
 export class ClinicalNoteDatabase extends Dexie {
   notes!: EntityTable<Note, 'id'>;
@@ -23,6 +25,7 @@ export class ClinicalNoteDatabase extends Dexie {
   queuedMutations!: EntityTable<QueuedMutation, 'id'>;
   noteSnapshots!: EntityTable<NoteDetail, 'id'>;
   telemetryBatches!: EntityTable<PersistedTelemetryBatch, 'id'>;
+  noteDrafts!: EntityTable<PersistedNoteDraft, 'noteId'>;
 
   constructor() {
     super('clinical-note-review');
@@ -40,6 +43,9 @@ export class ClinicalNoteDatabase extends Dexie {
     });
     this.version(3).stores({
       notes: 'id, patientId, encounterId, status, updatedAt', noteVersions: 'id, noteId, parentVersionId, createdAt', reviewEvents: 'id, noteId, versionId, occurredAt, action', queuedMutations: 'id, noteId, createdAt, status, dependsOnMutationId', noteSnapshots: 'id, updatedAt', telemetryBatches: 'id, createdAt',
+    });
+    this.version(4).stores({
+      notes: 'id, patientId, encounterId, status, updatedAt', noteVersions: 'id, noteId, parentVersionId, createdAt', reviewEvents: 'id, noteId, versionId, occurredAt, action', queuedMutations: 'id, noteId, createdAt, status, dependsOnMutationId', noteSnapshots: 'id, updatedAt', telemetryBatches: 'id, createdAt', noteDrafts: 'noteId, updatedAt',
     });
   }
 }

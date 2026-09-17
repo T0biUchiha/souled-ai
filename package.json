@@ -12,6 +12,7 @@
     "format:check": "prettier . --check",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
+    "test:stress": "vitest run src/backend/realtime.stress.test.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
   },

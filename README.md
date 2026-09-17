@@ -92,7 +92,9 @@ Capability helpers are UX-only. Backend validation remains authoritative for rol
 
 ## Telemetry
 
-`TelemetryClient.track(name, properties, options)` batches telemetry and flushes by size, timer, route activity, page-hidden state, and unload. It retries failures then persists batches in IndexedDB for later delivery using beacon/keepalive when appropriate.
+`TelemetryClient.track(name, properties, options)` is the only client-side telemetry entry point. Events have stable IDs, are batched at 20 events or every 10 seconds, and preserve enqueue order. Route changes flush prior pending work; hidden/pagehide lifecycle events use `sendBeacon` when available, then `fetch(..., { keepalive: true })`.
+
+Failed batches retry with exponential backoff (500 ms base, capped at 30 seconds). After three failed attempts they are parked in Dexie and restored/delivered on the next client initialization. Telemetry is deliberately best-effort: no note save, transition, or realtime flow awaits telemetry delivery.
 
 ## PII Redaction Exemption
 
@@ -104,7 +106,7 @@ The list uses 50-record cursor pages and virtualized rendering; there is no all-
 
 ## Accessibility / WCAG 2.2 AA
 
-Semantic grids/forms/lists, visible focus, labeled inputs, keyboard row navigation, live connectivity/status announcements, disabled-action descriptions, and accessible version/timeline structures are implemented. Conflict resolution is an inline region, not a focus-trapping modal.
+Designed and tested toward WCAG 2.2 AA requirements: semantic grids/forms/lists, visible focus, labeled inputs, keyboard row navigation, live connectivity/status announcements, disabled-action descriptions, and accessible version/timeline structures are implemented. Reject confirmation is a keyboard-managed dialog that restores trigger focus on Escape; conflicts are named, focusable resolution regions. LOCKED notes use disabled SOAP controls and an explicit read-only notice. UI permissions are explanatory only—the backend remains authoritative, with browser coverage for an unassigned reviewer and direct mutation rejection.
 
 ## Testing Strategy
 

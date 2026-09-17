@@ -15,6 +15,9 @@ export class RealtimeClient {
   subscribe(noteIds: readonly string[]): () => void { noteIds.forEach((id) => this.noteRefs.set(id, (this.noteRefs.get(id) ?? 0) + 1)); this.connect(); return () => { noteIds.forEach((id) => { const next = (this.noteRefs.get(id) ?? 1) - 1; if (next <= 0) this.noteRefs.delete(id); else this.noteRefs.set(id, next); }); this.connect(); }; }
   onEvent(listener: Listener): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   close(): void { if (this.timer !== null) clearTimeout(this.timer); this.source?.close(); this.source = null; }
+  /** Test controls exercise the same reconnect path without relying on socket timing. */
+  testDisconnect(): void { this.source?.close(); this.source = null; }
+  testReconnect(): void { this.connect(); }
   /** Development/test diagnostics for proving subscriptions remain viewport-bounded. */
   getActiveSubscriptionCount(): number { return this.noteRefs.size; }
   getSubscribedNoteIds(): readonly string[] { return [...this.noteRefs.keys()]; }

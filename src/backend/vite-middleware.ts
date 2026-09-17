@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import type { BulkRequest, ListNotesQuery, SaveVersionRequest, TransitionRequest } from './contracts';
 import { DummyBackendStore } from './store';
-import { realtimeBus } from './realtime';
+import { realtimeBus, testAcknowledgements } from './realtime';
 import { mulberry32 } from './seed';
 
 export interface DummyBackendConfig {
@@ -107,7 +107,7 @@ export const createDummyBackendPlugin = (config: DummyBackendConfig = {}): Plugi
             return json(response, result.ok ? 201 : result.status, result.ok ? result.data : result.error);
           }
           if (resource === 'transitions' && request.method === 'POST') {
-            const result = store.transition(noteId, body as TransitionRequest);
+            const result = store.transition(noteId, body as TransitionRequest); await testAcknowledgements.wait('transition');
             return json(response, result.ok ? 200 : result.status, result.ok ? result.data : result.error);
           }
           return json(response, 405, { error: 'invalid_request', message: 'Method not allowed.' });
